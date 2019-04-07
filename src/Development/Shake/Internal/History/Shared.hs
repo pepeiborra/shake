@@ -6,6 +6,7 @@ module Development.Shake.Internal.History.Shared(
     removeShared, listShared
     ) where
 
+import Control.Exception (evaluate)
 import Development.Shake.Internal.Value
 import Development.Shake.Internal.History.Types
 import Development.Shake.Internal.History.Symlink
@@ -137,7 +138,9 @@ removeShared Shared{..} test = do
         (items, _slop) <- withFile (dir </> "_key") ReadMode $ \h ->
             readChunksDirect h maxBound
         -- if any key matches, clean them all out
-        let b = any (test . entryKey . getEntry keyOp) items
+        b <- anyM ( handleSynchronous (\e -> False <$ putStrLn ("Warning: " ++ show e))
+                  . evaluate . test . entryKey . getEntry keyOp
+                  ) items
         when b $ removeDirectoryRecursive dir
         return b
     liftIO $ putStrLn $ "Deleted " ++ show (length (filter id deleted)) ++ " entries"
@@ -149,7 +152,8 @@ listShared Shared{..} = do
         putStrLn $ "Directory: " ++ dir
         (items, _slop) <- withFile (dir </> "_key") ReadMode $ \h ->
             readChunksDirect h maxBound
-        forM_ items $ \item -> do
+        forM_ items $ \item ->
+          handleSynchronous (\e -> putStrLn $ "Warning: " ++ show e) $ do
             let Entry{..} = getEntry keyOp item
             putStrLn $ "  Key: " ++ show entryKey
             forM_ entryFiles $ \(file,_) ->
