@@ -6,7 +6,7 @@ module General.Cleanup(
     ) where
 
 import Control.Exception
-import qualified Data.HashMap.Strict as Map
+import qualified Data.IntMap.Strict as Map
 import Data.IORef
 import Data.List.Extra
 import Data.Maybe
@@ -14,7 +14,7 @@ import Data.Maybe
 
 data S = S
     {unique :: {-# UNPACK #-} !Int -- next index to be used to items
-    ,items :: !(Map.HashMap Int (IO ()))
+    ,items :: !(Map.IntMap (IO ()))
     }
 
 newtype Cleanup = Cleanup (IORef S)
