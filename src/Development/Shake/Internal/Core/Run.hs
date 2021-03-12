@@ -111,8 +111,10 @@ run RunState{..} oneshot actions2 =
 
         res <- withCleanup $ \cleanup -> do
             register cleanup $ do
-                when (shakeTimings && shakeVerbosity >= Info) $
-                    writeIORef timingsToShow . Just =<< getTimings
+                when (shakeTimings && shakeVerbosity >= Info) $ do
+                    timings <- getTimings
+                    writeIORef timingsToShow $ Just timings
+                    mapM_ putStrLn timings
                 resetTimings
 
             start <- offsetTime
