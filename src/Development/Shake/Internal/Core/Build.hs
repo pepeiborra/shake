@@ -132,11 +132,18 @@ buildRunMode global stack database me = do
 
 -- | Have the dependencies changed
 buildRunDependenciesChanged :: Global -> Stack -> Database -> Result a -> Wait Locked Bool
-buildRunDependenciesChanged global stack database me = isJust <$> firstJustM id
+buildRunDependenciesChanged global stack database me = firstJustM id
     [firstJustWaitUnordered (fmap test . lookupOne global stack database) x | Depends x <- depends me]
     where
         test (Right dep) | changed dep <= built me = Nothing
         test _ = Just ()
+
+        firstJustM p [] = pure False
+        firstJustM p (x:xs) = do
+            res <- p x
+            case res of
+                Just{} -> pure True
+                Nothing -> firstJustM p xs
 
 
 ---------------------------------------------------------------------
