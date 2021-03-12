@@ -8,6 +8,7 @@ module General.Fence(
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Exception.Extra
+import Data.Atomics
 import Development.Shake.Internal.Errors
 import Data.Maybe
 import Data.Either.Extra
@@ -25,12 +26,12 @@ newFence :: MonadIO m => IO (Fence m a)
 newFence = Fence <$> newIORef (Left $ const $ pure ())
 
 signalFence :: (Partial, MonadIO m) => Fence m a -> a -> m ()
-signalFence (Fence ref) v = join $ liftIO $ atomicModifyIORef' ref $ \case
+signalFence (Fence ref) v = join $ liftIO $ atomicModifyIORefCAS ref $ \case
     Left queue -> (Right v, queue v)
     Right _ -> throwImpure $ errorInternal "signalFence called twice on one Fence"
 
 waitFence :: MonadIO m => Fence m a -> (a -> m ()) -> m ()
-waitFence (Fence ref) call = join $ liftIO $ atomicModifyIORef' ref $ \case
+waitFence (Fence ref) call = join $ liftIO $ atomicModifyIORefCAS ref $ \case
     Left queue -> (Left (\a -> queue a >> call a), pure ())
     Right v -> (Right v, call v)
 
@@ -48,7 +49,7 @@ exceptFence xs = do
     fence <- liftIO newFence
 
     forM_ xs $ \x -> waitFence x $ \res ->
-        join $ liftIO $ atomicModifyIORef' todo $ \i -> case res of
+        join $ liftIO $ atomicModifyIORefCAS todo $ \i -> case res of
             Left e | i >= 0 -> (-1, signalFence fence $ Left e)
             _ | i == 1 -> (-1, signalFence fence . Right =<< liftIO (mapM (fmap (fromRight' . fromJust) . testFence) xs))
               | otherwise -> (i-1, pure ())

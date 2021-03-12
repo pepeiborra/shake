@@ -34,6 +34,7 @@ import qualified Data.HashMap.Strict as Map
 import qualified Data.HashSet as Set
 import Data.Dynamic
 import Data.Maybe
+import Data.Atomics
 import Data.IORef.Extra
 import System.Directory
 import System.Time.Extra
@@ -122,7 +123,7 @@ run RunState{..} oneshot actions2 =
                     | not shakeStaunch = throwIO err
                     | otherwise = do
                         let named = shakeAbbreviationsApply opts . shakeExceptionTarget
-                        atomicModifyIORef except $ \v -> (Just $ fromMaybe (named err, err) v, ())
+                        atomicModifyIORefCAS except $ \v -> (Just $ fromMaybe (named err, err) v, ())
                         -- no need to print exceptions here, they get printed when they are wrapped
 
             after <- newIORef []
@@ -148,7 +149,7 @@ run RunState{..} oneshot actions2 =
                     let local = newLocal stack shakeVerbosity
                     addPool PoolStart pool $ runAction global local (act >> getLocal) $ \case
                         Left e -> raiseError =<< shakeException global stack e
-                        Right local -> atomicModifyIORef_ locals (local:)
+                        Right local -> atomicModifyIORefCAS_ locals (local:)
 
             whenJustM (readIORef except) (throwIO . snd)
             assertFinishedDatabase database

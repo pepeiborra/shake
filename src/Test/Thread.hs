@@ -13,9 +13,9 @@ import Test.Type
 
 main = testSimple $ do
     ref <- newIORef 0
-    let finish = atomicModifyIORef ref $ \x -> (x+1, ())
+    let finish = atomicModifyIORefCAS ref $ \x -> (x+1, ())
     let finished want = do
-            got <- atomicModifyIORef ref (0,)
+            got <- atomicModifyIORefCAS ref (0,)
             want === got
 
     pauser <- newEmptyMVar

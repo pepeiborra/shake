@@ -15,6 +15,7 @@ import System.Directory
 import System.Process
 import System.FilePath
 import Data.Char
+import Data.Atomics
 import Data.IORef
 import Data.List
 import Data.Maybe
@@ -334,7 +335,7 @@ progressProgram = do
                           | failure = "Error"
                           | otherwise = "Normal"
                 let args = ["--title=" ++ msg, "--state=" ++ state] ++ ["--value=" ++ perc | perc /= ""]
-                same <- atomicModifyIORef lastArgs $ \old -> (Just args, old == Just args)
+                same <- atomicModifyIORefCAS lastArgs $ \old -> (Just args, old == Just args)
                 unless same $ void $ rawSystem exe args
 
 

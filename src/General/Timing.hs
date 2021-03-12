@@ -1,6 +1,7 @@
 
 module General.Timing(resetTimings, addTiming, getTimings) where
 
+import Data.Atomics
 import Data.IORef.Extra
 import System.IO.Unsafe
 import Data.Tuple.Extra
@@ -30,14 +31,14 @@ resetTimings = do
 getTimings :: IO [String]
 getTimings = do
     now <- timer
-    old <- atomicModifyIORef timings dupe
+    old <- atomicModifyIORefCAS timings dupe
     pure $ showTimings now $ reverse old
 
 
 addTiming :: String -> IO ()
 addTiming msg = do
     now <- timer
-    atomicModifyIORef_ timings ((now,msg):)
+    atomicModifyIORefCAS_ timings ((now,msg):)
 
 
 showTimings :: Seconds -> [(Seconds, String)] -> [String]

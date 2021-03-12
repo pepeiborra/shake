@@ -11,6 +11,7 @@ import Control.Concurrent.Extra
 import General.Fence
 import Control.Exception.Extra
 import Data.Tuple.Extra
+import Data.Atomics
 import Data.IORef
 import Control.Monad.Extra
 import General.Bilist
@@ -32,7 +33,7 @@ resourceId = unsafePerformIO resourceCounter
 resourceCounter :: IO (IO Int)
 resourceCounter = do
     ref <- newIORef 0
-    pure $ atomicModifyIORef' ref $ \i -> let j = i + 1 in (j, j)
+    pure $ atomicModifyIORefCAS ref $ \i -> let j = i + 1 in (j, j)
 
 
 -- | Run an action which uses part of a finite resource. For more details see 'Resource'.

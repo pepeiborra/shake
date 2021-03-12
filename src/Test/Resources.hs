@@ -27,10 +27,10 @@ main = testBuild test $ do
         phony "cap" $ need ["c_file" ++ show i ++ ".txt" | i <- [1..4]]
         "c_*.txt" %> \out ->
             withResource res 1 $ do
-                old <- liftIO $ atomicModifyIORef inside $ \i -> (i+1,i)
+                old <- liftIO $ atomicModifyIORefCAS inside $ \i -> (i+1,i)
                 when (old >= cap) $ fail "Too many resources in use at one time"
                 liftIO $ sleep 0.1
-                liftIO $ atomicModifyIORef inside $ \i -> (i-1,i)
+                liftIO $ atomicModifyIORefCAS inside $ \i -> (i-1,i)
                 writeFile' out ""
 
     -- test things can still run while you are blocked on a resource
@@ -48,7 +48,7 @@ main = testBuild test $ do
             withResource lock 1 $ liftIO $ sleep 0.5
             writeFile' out ""
         "s_free*" %> \out -> do
-            liftIO $ atomicModifyIORef done $ \i -> (i+1,())
+            liftIO $ atomicModifyIORefCAS done $ \i -> (i+1,())
             writeFile' out ""
 
     -- test that throttle works properly

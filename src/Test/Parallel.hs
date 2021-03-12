@@ -61,7 +61,7 @@ main = testBuild test $ do
         done <- liftIO $ newIORef 0
         lock <- liftIO newLock
         void $ parallel $ replicate 5 $ liftIO $ do
-            x <- atomicModifyIORef done $ dupe . succ
+            x <- atomicModifyIORefCAS done $ dupe . succ
             when (x == 3) $ do sleep 0.1; fail "boom"
             withLock lock $ appendFile "cancel" "x"
 
@@ -69,10 +69,10 @@ main = testBuild test $ do
         active <- liftIO $ newIORef 0
         peak <- liftIO $ newIORef 0
         void $ parallel $ replicate 8 $ liftIO $ do
-            now <- atomicModifyIORef active $ dupe . succ
-            atomicModifyIORef peak $ dupe . max now
+            now <- atomicModifyIORefCAS active $ dupe . succ
+            atomicModifyIORefCAS peak $ dupe . max now
             sleep 0.1
-            atomicModifyIORef active $ dupe . pred
+            atomicModifyIORefCAS active $ dupe . pred
         peak <- liftIO $ readIORef peak
         writeFile' "parallel" $ show peak
 

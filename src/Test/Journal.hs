@@ -17,7 +17,7 @@ rebuilt = unsafePerformIO $ newIORef 0
 main = testBuild test $ do
     want ["a.out","b.out","c.out"]
     "*.out" %> \out -> do
-        liftIO $ atomicModifyIORef rebuilt $ \a -> (a+1,())
+        liftIO $ atomicModifyIORefCAS rebuilt $ \a -> (a+1,())
         copyFile' (out -<.> "in") out
 
 

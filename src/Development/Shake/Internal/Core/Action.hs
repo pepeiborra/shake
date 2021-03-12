@@ -32,6 +32,7 @@ import System.Time.Extra
 import Control.Concurrent.Extra
 import Data.Maybe
 import Data.Tuple.Extra
+import Data.Atomics
 import Data.IORef.Extra
 import Data.List.Extra
 import Numeric.Extra
@@ -153,7 +154,7 @@ getProgress = do
 runAfter :: IO () -> Action ()
 runAfter op = do
     Global{..} <- Action getRO
-    liftIO $ atomicModifyIORef_ globalAfter (op:)
+    liftIO $ atomicModifyIORefCAS_ globalAfter (op:)
 
 
 ---------------------------------------------------------------------
@@ -341,7 +342,7 @@ lintTrackFinished = do
         -- check Write 3
         bad<- pure $ filter (not . ignore) $ Set.toList $ Set.fromList localTrackWrite
         unless (null bad) $
-            liftIO $ atomicModifyIORef_ globalTrackAbsent ([(fromMaybe k top, k) | k <- bad] ++)
+            liftIO $ atomicModifyIORefCAS_ globalTrackAbsent ([(fromMaybe k top, k) | k <- bad] ++)
 
 
 -- | Allow any matching key recorded with 'lintTrackRead' or 'lintTrackWrite' in this action,
@@ -543,7 +544,7 @@ batch mx pred one many
             fence <- liftIO newFence
             -- add one to the batch
             local <- Action getRW
-            count <- liftIO $ atomicModifyIORef todo $ \(count, bs) -> let i = count+1 in ((i, (b,local,fence):bs), i)
+            count <- liftIO $ atomicModifyIORefCAS todo $ \(count, bs) -> let i = count+1 in ((i, (b,local,fence):bs), i)
             requeue todo (==) count
             (wait, (cost, local2)) <- actionFenceRequeue fence
             Action $ modifyRW $ \root -> addDiscount (wait - cost) $ localMergeMutable root [local2]
@@ -557,7 +558,7 @@ batch mx pred one many
 
         go todo = do
             -- delete at most mx from the batch
-            (now, count) <- liftIO $ atomicModifyIORef todo $ \(count, bs) ->
+            (now, count) <- liftIO $ atomicModifyIORefCAS todo $ \(count, bs) ->
                 let (now,later) = splitAt mx bs
                     count2 = if count > mx then count - mx else 0
                 in ((count2, later), (now, count2))

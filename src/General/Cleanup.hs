@@ -7,6 +7,7 @@ module General.Cleanup(
 
 import Control.Exception
 import qualified Data.HashMap.Strict as Map
+import Data.Atomics
 import Data.IORef
 import Data.List.Extra
 import Data.Maybe
@@ -38,21 +39,21 @@ newCleanup = do
     -- e.g. see https://github.com/digital-asset/ghcide/issues/381
     -- note that packages like safe-exceptions also use uninterruptibleMask_
     let clean = uninterruptibleMask_ $ do
-            items <- atomicModifyIORef' ref $ \s -> (s{items=Map.empty}, items s)
+            items <- atomicModifyIORefCAS ref $ \s -> (s{items=Map.empty}, items s)
             mapM_ snd $ sortOn (negate . fst) $ Map.toList items
     pure (Cleanup ref, clean)
 
 
 register :: Cleanup -> IO () -> IO ReleaseKey
-register (Cleanup ref) act = atomicModifyIORef' ref $ \s -> let i = unique s in
+register (Cleanup ref) act = atomicModifyIORefCAS ref $ \s -> let i = unique s in
     (S (unique s + 1) (Map.insert i act $ items s), ReleaseKey ref i)
 
 unprotect :: ReleaseKey -> IO ()
-unprotect (ReleaseKey ref i) = atomicModifyIORef' ref $ \s -> (s{items = Map.delete i $ items s}, ())
+unprotect (ReleaseKey ref i) = atomicModifyIORefCAS ref $ \s -> (s{items = Map.delete i $ items s}, ())
 
 release :: ReleaseKey -> IO ()
 release (ReleaseKey ref i) = uninterruptibleMask_ $ do
-    undo <- atomicModifyIORef' ref $ \s -> (s{items = Map.delete i $ items s}, Map.lookup i $ items s)
+    undo <- atomicModifyIORefCAS ref $ \s -> (s{items = Map.delete i $ items s}, Map.lookup i $ items s)
     fromMaybe (pure ()) undo
 
 allocate :: Cleanup -> IO a -> (a -> IO ()) -> IO a

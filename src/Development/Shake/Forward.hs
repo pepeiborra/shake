@@ -55,6 +55,7 @@ import Development.Shake.Rule
 import Development.Shake.Command
 import Development.Shake.Classes
 import Development.Shake.FilePath
+import Data.Atomics
 import Data.IORef.Extra
 import Data.Either
 import Data.Typeable
@@ -114,7 +115,7 @@ forwardRule act = do
         case old of
             Just old | mode == RunDependenciesSame -> pure $ RunResult ChangedNothing old (decode' old)
             _ -> do
-                res <- liftIO $ atomicModifyIORef forwards $ \mp -> (Map.delete k mp, Map.lookup k mp)
+                res <- liftIO $ atomicModifyIORefCAS forwards $ \mp -> (Map.delete k mp, Map.lookup k mp)
                 case res of
                     Nothing -> liftIO $ errorIO $ "Failed to find action name, " ++ show k
                     Just act -> do
@@ -133,9 +134,9 @@ forwardOptions opts = opts{shakeCommandOptions=[AutoDeps]}
 --   (e.g. the action is a closure), you should call 'cacheActionWith' being explicit about what is captured.
 cacheAction :: (Typeable a, Binary a, Show a, Typeable b, Binary b, Show b) => a -> Action b -> Action b
 cacheAction (mkForward -> key) (action :: Action b) = do
-    liftIO $ atomicModifyIORef_ forwards $ Map.insert key (mkForward <$> action)
+    liftIO $ atomicModifyIORefCAS_ forwards $ Map.insert key (mkForward <$> action)
     res <- apply1 key
-    liftIO $ atomicModifyIORef_ forwards $ Map.delete key
+    liftIO $ atomicModifyIORefCAS_ forwards $ Map.delete key
     pure $ unForward res
 
 newtype With a = With a

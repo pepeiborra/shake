@@ -12,6 +12,7 @@ module Development.Shake.Internal.Core.Monad(
 import Control.Exception.Extra
 import Development.Shake.Internal.Errors
 import Control.Monad.IO.Class
+import Data.Atomics
 import Data.IORef
 import Control.Monad
 import System.IO
@@ -76,7 +77,7 @@ assertOnce msg k
     | otherwise = do
         ref <- liftIO $ newIORef False
         pure $ \v -> do
-            liftIO $ join $ atomicModifyIORef ref $ \old -> (True,) $ when old $ do
+            liftIO $ join $ atomicModifyIORefCAS ref $ \old -> (True,) $ when old $ do
                 hPutStrLn stderr "FATAL ERROR: assertOnce failed"
                 Prelude.fail $ "assertOnce failed: " ++ msg
             k v
