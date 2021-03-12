@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE RecordWildCards #-}
 
 -- | Lower-level primitives to drive Shake, which are wrapped into the
@@ -38,6 +39,8 @@ import Development.Shake.Internal.Core.Rules
 import Development.Shake.Internal.Core.Run
 import Development.Shake.Internal.Core.Types
 import Development.Shake.Internal.Rules.Default
+import Data.Atomics
+import GHC.Base (raise#)
 
 
 data UseState
@@ -49,7 +52,7 @@ data UseState
 --   'shakeOpenDatabase' or 'shakeWithDatabase'. Used with
 --   'shakeRunDatabase'. You may not execute simultaneous calls using 'ShakeDatabase'
 --   on separate threads (it will raise an error).
-data ShakeDatabase = ShakeDatabase (Var UseState) RunState
+data ShakeDatabase = ShakeDatabase (IORef UseState) RunState
 
 -- | Given some options and rules, return a pair. The first component opens the database,
 --   the second cleans it up. The creation /does not/ need to be run masked, because the
@@ -58,24 +61,24 @@ data ShakeDatabase = ShakeDatabase (Var UseState) RunState
 shakeOpenDatabase :: ShakeOptions -> Rules () -> IO (IO ShakeDatabase, IO ())
 shakeOpenDatabase opts rules = do
     (cleanup, clean) <- newCleanup
-    use <- newVar $ Open False False
+    use <- newIORef $ Open False False
     let alloc =
             withOpen use "shakeOpenDatabase" id $ \_ ->
                 ShakeDatabase use <$> open cleanup opts (rules >> defaultRules)
     let free = do
-            modifyVar_ use $ \case
-                    Using s -> throwM $ errorStructured "Error when calling shakeOpenDatabase close function, currently running" [("Existing call", Just s)] ""
-                    _ -> pure Closed
+            atomicModifyIORefCAS_ use $ \case
+                    Using s -> raise# (errorStructured "Error when calling shakeOpenDatabase close function, currently running" [("Existing call", Just s)] "")
+                    _ -> Closed
             clean
     pure (alloc, free)
 
-withOpen :: Var UseState -> String -> (UseState -> UseState) -> (UseState -> IO a) -> IO a
+withOpen :: IORef UseState -> String -> (UseState -> UseState) -> (UseState -> IO a) -> IO a
 withOpen var name final act = mask $ \restore -> do
-    o <- modifyVar var $ \case
-        Using s -> throwM $ errorStructured ("Error when calling " ++ name ++ ", currently running") [("Existing call", Just s)] ""
-        Closed -> throwM $ errorStructured ("Error when calling " ++ name ++ ", already closed") [] ""
-        o@Open{} -> pure (Using name, o)
-    let clean = writeVar var $ final o
+    o <- atomicModifyIORefCAS  var $ \case
+        Using s -> raise# $ errorStructured ("Error when calling " ++ name ++ ", currently running") [("Existing call", Just s)] ""
+        Closed -> raise# $ errorStructured ("Error when calling " ++ name ++ ", already closed") [] ""
+        o@Open{} -> (Using name, o)
+    let clean = writeIORef var $ final o
     res <- restore (act o) `onException` clean
     clean
     pure res
