@@ -7,7 +7,7 @@ module Development.Shake.Internal.Core.Database(
     mkId,
     getValueFromKey, getIdFromKey, getKeyValues, getKeyValueFromId, getKeyValuesFromId,
     setMem, setDisk, modifyAllMem,
-    isDirty, markDirty, unmarkDirty
+    isDirty, getDirtySet, markDirty, unmarkDirty
     ) where
 
 import Data.Tuple.Extra
@@ -92,6 +92,9 @@ getIdFromKey Database{..} = do
 
 isDirty :: DatabasePoly k v -> Id -> IO Bool
 isDirty Database{..} i = HSet.member i <$> readIORef dirty
+
+getDirtySet :: DatabasePoly k v -> IO (HashSet Id)
+getDirtySet Database{..} = readIORef dirty
 
 ---------------------------------------------------------------------
 -- MUTATING
