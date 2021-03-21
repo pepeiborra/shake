@@ -6,7 +6,8 @@ module Development.Shake.Internal.Core.Database(
     DatabasePoly, createDatabase,
     mkId,
     getValueFromKey, getIdFromKey, getKeyValues, getKeyValueFromId, getKeyValuesFromId,
-    setMem, setDisk, modifyAllMem
+    setMem, setDisk, modifyAllMem,
+    isDirty, markDirty, unmarkDirty
     ) where
 
 import Data.Tuple.Extra
@@ -21,6 +22,9 @@ import qualified General.Ids as Ids
 import Control.Monad.Fail
 import Prelude
 import Control.Exception (mask_)
+import Data.HashSet (HashSet)
+import qualified Data.HashSet as HSet
+import Data.List (foldl')
 
 
 newtype Locked a = Locked (IO a)
@@ -42,6 +46,8 @@ data DatabasePoly k v = Database
     ,status :: Ids.Ids (k, v) -- ^ Id |-> (Key, Status) mapping
     ,journal :: Id -> k -> v -> IO () -- ^ Record all changes to status
     ,vDefault :: v
+    ,dirty :: IORef (HashSet Id)
+    -- ^ An approximation of the dirty set across runs of 'shakeRunDatabaseForKeys'
     }
 
 
@@ -55,6 +61,7 @@ createDatabase status journal vDefault = do
     xs <- Ids.toList status
     intern <- newIORef $ Intern.fromList [(k, i) | (i, (k,_)) <- xs]
     lock <- newLock
+    dirty <- newIORef mempty
     pure Database{..}
 
 
@@ -83,6 +90,8 @@ getIdFromKey Database{..} = do
     is <- readIORef intern
     pure $ flip Intern.lookup is
 
+isDirty :: DatabasePoly k v -> Id -> IO Bool
+isDirty Database{..} i = HSet.member i <$> readIORef dirty
 
 ---------------------------------------------------------------------
 -- MUTATING
@@ -109,3 +118,10 @@ modifyAllMem Database{..} f = liftIO $ Ids.forMutate status $ second f
 
 setDisk :: DatabasePoly k v -> Id -> k -> v -> IO ()
 setDisk = journal
+
+markDirty :: DatabasePoly k v -> HashSet Id -> IO ()
+markDirty Database{..} ids = atomicModifyIORef'_ dirty $ HSet.union ids
+
+unmarkDirty :: DatabasePoly k v -> Id -> IO ()
+unmarkDirty Database{..} i = do
+    atomicModifyIORef'_ dirty (HSet.delete i)
