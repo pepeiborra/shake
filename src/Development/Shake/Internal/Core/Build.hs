@@ -102,7 +102,9 @@ buildOne global@Global{..} stack database i k r = case addStack i k stack of
     Right stack -> Later $ \continue -> do
         setIdKeyStatus global database i k (Running (NoShow continue) r)
         let go = buildRunMode global stack database r
-        fromLater go $ \mode -> liftIO $ addPool PoolStart globalPool $
+            schedule k RunDependenciesSame | shakeInProcess shakeOptions = liftIO $ k RunDependenciesSame
+            schedule k mode = liftIO $ addPool PoolStart globalPool $ k mode
+        fromLater go $ schedule $ \mode ->
             runKey global stack k r mode $ \res -> do
                 runLocked database $ do
                     let val = fmap runValue res
